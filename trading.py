@@ -1,44 +1,18 @@
 import pandas_datareader.data as web
 import pandas as pd
 from FindTrendingStocks import findTrendingStocks
-from algo import decide
 from datetime import datetime
-import alpaca_trade_api as tradeapi
-import requests
-import json
 from config import *
 from algo import *
 import os
 import time
 import csv
 from pandas_datareader._utils import RemoteDataError
+from ib_insync import *
 
-# alpaca api information, used for requests
-BASE_URL = 'https://paper-api.alpaca.markets'
-ACCOUNT_URL = '{}/v2/account'.format(BASE_URL)
-ORDERS_URL = '{}/v2/orders'.format(BASE_URL)
-HEADERS = {'APCA-API-KEY-ID' : API_KEY, 'APCA-API-SECRET-KEY' : SECRET_KEY}
-
-# returns json of information on the account, like equity, buying power, etc.
-def getAccountInfo():
-	r = requests.get(ACCOUNT_URL, headers = HEADERS)
-	return json.loads(r.content)
-
-# creates an order for either buy or sell
-def create_order(symbol, qty, side, type, time_in_force):
-	data = {
-		'symbol' : symbol,
-		'qty' : qty,
-		'side' : side,
-		'type' : type,
-		'time_in_force' : time_in_force
-	}
-	try:
-		r = requests.post(ORDERS_URL, json = data, headers = HEADERS)
-		response = json.loads(r.content)
-		return json.loads(r.content)
-	except NameError as e:
-		print(e)
+def getAccountInfo(ib,tag,currency):
+	account_value = [v for v in ib.accountValues() if v.tag == tag and v.currency == currency]
+	return account_value[0]
 
 # get stocks on the watchlist and portfolio and save them in a set to determine
 # which stocks to watch		
@@ -60,22 +34,33 @@ def updatePortfolio():
 	fObj.close()
 
 # cycle function that will repeat (loop), gets stock data and decides what to do
-def cycle():
+def cycle(ib):
 	watchlist = getWatchList()
 	for symbol in watchlist:
 		try:
-			move = decide(symbol)
+			stock = Stock(symbol, 'SMART', 'USD', localSymbol=symbol)
+			move = decide(stock,ib)
 			if move == 'sell':
-				create_order(symbol, portfolio[symbol], 'sell', 'market', 'gtc')
-				print('Sold ' + symbol + ' at ' + str(getPrice(symbol)))
+				# create_order(symbol, portfolio[symbol], 'sell', 'market', 'gtc')
+				order = MarketOrder('SELL', portfolio[symbol])
+				trade = ib.placeOrder(stock, order)
+				# Uncomment during market hours
+				# while not trade.isDone():
+				# 	ib.waitOnUpdate()
+				print('Sold ' + symbol + ' at ' + str(getPrice(stock)))
 				del portfolio[symbol]
 				updatePortfolio()
 			elif move == 'buy':
-				if float(getAccountInfo()['buying_power']) < 3000:
+				if float(getAccountInfo(ib,'BuyingPower','GBP').value) < 3000:
 					continue;
-				create_order(symbol, 3000 // getPrice(symbol), 'buy', 'market', 'gtc')
-				print('Bought ' + symbol + ' at ' + str(getPrice(symbol)))
-				portfolio[symbol] = 3000 // getPrice(symbol)
+				# create_order(symbol, 3000 // getPrice(symbol,ib), 'buy', 'market', 'gtc')
+				order = MarketOrder('BUY', 3000 // getPrice(stock,ib))
+				trade = ib.placeOrder(stock, order)
+				# Uncomment during market hours
+				# while not trade.isDone():
+				# 	ib.waitOnUpdate()
+				print('Bought ' + symbol + ' at ' + str(getPrice(stock,ib)))
+				portfolio[symbol] = 3000 // getPrice(stock,ib)
 				updatePortfolio()
 			else:
 				continue;

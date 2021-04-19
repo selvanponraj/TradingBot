@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from FindTrendingStocks import findTrendingStocks
 import datetime as dt
 from sklearn.linear_model import LinearRegression
+from ib_insync import *
 
 # portfolio stored as a dict for stock to number of stocks
 portfolio = {}
@@ -28,11 +29,18 @@ def initPortfolio():
 MAX_SIZE = 30
 
 # returns up, low, width of 20 day bollinger bands
-def find20BBBounds(symbol):
-	df = web.DataReader(symbol, data_source = 'yahoo', 
-		start = datetime.now() - timedelta(days = 40), end = datetime.now())
-	df['20 Day MA'] = df['Adj Close'].rolling(window = 20).mean()
-	df['20 Day STD'] = df['Adj Close'].rolling(window = 20).std().apply(
+def find20BBBounds(stock,ib):
+	# df = web.DataReader(symbol, data_source = 'yahoo', 
+	# 	start = datetime.now() - timedelta(days = 40), end = datetime.now())
+
+	# stock = Stock(symbol, 'SMART', 'USD')
+	bars = ib.reqHistoricalData(
+    stock, endDateTime='', durationStr='40 D',
+    barSizeSetting='1 day', whatToShow='TRADES', useRTH=True)
+	df = util.df(bars)
+
+	df['20 Day MA'] = df['close'].rolling(window = 20).mean()
+	df['20 Day STD'] = df['close'].rolling(window = 20).std().apply(
 		lambda x: x * (math.sqrt(19) / math.sqrt(20)))
 	df['Upper Band'] = df['20 Day MA'] + 2 * df['20 Day STD']
 	df['Lower Band'] = df['20 Day MA'] - 2 * df['20 Day STD']
@@ -40,11 +48,18 @@ def find20BBBounds(symbol):
 	(df.iloc[-1]['Upper Band'] - df.iloc[-1]['Lower Band']) / df.iloc[-1]['20 Day MA'])	
 
 # returns up, low, width of 10 day bollinger bands
-def find10BBBounds(symbol):
-	df = web.DataReader(symbol, data_source = 'yahoo', 
-		start = datetime.now() - timedelta(days = 40), end = datetime.now())
-	df['10 Day MA'] = df['Adj Close'].rolling(window = 10).mean()
-	df['10 Day STD'] = df['Adj Close'].rolling(window = 10).std().apply(
+def find10BBBounds(stock,ib):
+	# df = web.DataReader(symbol, data_source = 'yahoo', 
+	# 	start = datetime.now() - timedelta(days = 40), end = datetime.now())
+
+	# stock = Stock(symbol, 'SMART', 'USD')
+	bars = ib.reqHistoricalData(
+    stock, endDateTime='', durationStr='40 D',
+    barSizeSetting='1 day', whatToShow='TRADES', useRTH=True)
+	df = util.df(bars)
+
+	df['10 Day MA'] = df['close'].rolling(window = 10).mean()
+	df['10 Day STD'] = df['close'].rolling(window = 10).std().apply(
 		lambda x: x * (math.sqrt(9) / math.sqrt(10)))
 	df['Upper Band'] = df['10 Day MA'] + 1.5 * df['10 Day STD']
 	df['Lower Band'] = df['10 Day MA'] - 1.5 * df['10 Day STD']
@@ -52,27 +67,34 @@ def find10BBBounds(symbol):
 	(df.iloc[-1]['Upper Band'] - df.iloc[-1]['Lower Band']) / df.iloc[-1]['10 Day MA'])		
 
 # uses linear regression to find the best fit lines for bands and price
-def findEquations(symbol):
-	df = web.DataReader(symbol, data_source = 'yahoo', 
-		start = datetime.now() - timedelta(days = 90), end = datetime.now())
-	df['20 Day MA'] = df['Adj Close'].rolling(window = 20).mean()
-	df['20 Day STD'] = df['Adj Close'].rolling(window = 20).std().apply(
+def findEquations(stock,ib):
+	# df = web.DataReader(symbol, data_source = 'yahoo', 
+	# 	start = datetime.now() - timedelta(days = 90), end = datetime.now())
+	# stock = Stock(symbol, 'SMART', 'USD')
+
+	bars = ib.reqHistoricalData(
+    stock, endDateTime='', durationStr='90 D',
+    barSizeSetting='1 day', whatToShow='TRADES', useRTH=True)
+	df = util.df(bars)
+
+	df['20 Day MA'] = df['close'].rolling(window = 20).mean()
+	df['20 Day STD'] = df['close'].rolling(window = 20).std().apply(
 		lambda x: x * (math.sqrt(19) / math.sqrt(20)))
 	df['Upper Band'] = df['20 Day MA'] + 2 * df['20 Day STD']
 	df['Lower Band'] = df['20 Day MA'] - 2 * df['20 Day STD']
 	df = df.reset_index()
-	df['Date'] = pd.to_datetime(df['Date'])
-	df['Date']= df['Date'].map(dt.datetime.toordinal)
-	df['Date'] = df['Date'] - df.iloc[-5]['Date']
+	df['date'] = pd.to_datetime(df['date'])
+	df['date']= df['date'].map(dt.datetime.toordinal)
+	df['date'] = df['date'] - df.iloc[-5]['date']
 	prevChart = df.iloc[-5:]
 
 	BBModel = LinearRegression()
-	normalizedX = prevChart['Date'].values.reshape(-1, 1)
+	normalizedX = prevChart['date'].values.reshape(-1, 1)
 	normalizedY1 = prevChart['Upper Band'].values.reshape(-1, 1)
 	BBModel.fit(normalizedX, normalizedY1)
 
 	RTModel = LinearRegression()
-	normalizedY2 = prevChart['Adj Close'].values.reshape(-1, 1)
+	normalizedY2 = prevChart['close'].values.reshape(-1, 1)
 	RTModel.fit(normalizedX, normalizedY2)
 
 	BBModel2 = LinearRegression()
@@ -83,15 +105,23 @@ def findEquations(symbol):
 		BBModel.intercept_[0], RTModel.intercept_[0], BBModel2.intercept_[0])
 
 # plotting bounds using 10 day bollinger bands method, for testing
-def plotBBBounds10(symbol):
-	df = web.DataReader(symbol, data_source = 'yahoo', 
-		start = datetime.now() - timedelta(days = 100), end = datetime.now())
-	df['10 Day MA'] = df['Adj Close'].rolling(window = 10).mean()
-	df['10 Day STD'] = df['Adj Close'].rolling(window = 10).std().apply(
+def plotBBBounds10(stock,ib):
+	# df = web.DataReader(symbol, data_source = 'yahoo', 
+	# 	start = datetime.now() - timedelta(days = 100), end = datetime.now())
+
+	# stock = Stock(symbol, 'SMART', 'USD')
+
+	bars = ib.reqHistoricalData(
+    stock, endDateTime='', durationStr='100 D',
+    barSizeSetting='1 day', whatToShow='TRADES', useRTH=True)
+	df = util.df(bars)
+
+	df['10 Day MA'] = df['close'].rolling(window = 10).mean()
+	df['10 Day STD'] = df['close'].rolling(window = 10).std().apply(
 		lambda x: x * (math.sqrt(9) / math.sqrt(10)))
 	df['Upper Band'] = df['10 Day MA'] + 1.5 * df['10 Day STD']
 	df['Lower Band'] = df['10 Day MA'] - 1.5 * df['10 Day STD']
-	df[['Adj Close', '10 Day MA', 'Upper Band', 'Lower Band']].plot(figsize=(12,6))
+	df[['close', '10 Day MA', 'Upper Band', 'Lower Band']].plot(figsize=(12,6))
 
 	plt.style.use('fivethirtyeight')
 	fig = plt.figure(figsize=(12,6))
@@ -100,7 +130,7 @@ def plotBBBounds10(symbol):
 
 	ax.fill_between(x_axis, df['Upper Band'], df['Lower Band'], color='grey')
 
-	ax.plot(x_axis, df['Adj Close'], color='blue', lw=2)
+	ax.plot(x_axis, df['close'], color='blue', lw=2)
 	ax.plot(x_axis, df['10 Day MA'], color='black', lw=2)
 
 	ax.set_title('10 Day Bollinger Band For ' + symbol)
@@ -111,15 +141,23 @@ def plotBBBounds10(symbol):
 	plt.show()
 
 # plotting bounds using 20 day bollinger bands method, for testing
-def plotBBBounds20(symbol):
-	df = web.DataReader(symbol, data_source = 'yahoo', 
-		start = datetime.now() - timedelta(days = 200), end = datetime.now())
-	df['20 Day MA'] = df['Adj Close'].rolling(window = 20).mean()
-	df['20 Day STD'] = df['Adj Close'].rolling(window = 20).std().apply(
+def plotBBBounds20(stock,ib):
+	# df = web.DataReader(symbol, data_source = 'yahoo', 
+	# 	start = datetime.now() - timedelta(days = 200), end = datetime.now())
+	
+	# stock = Stock(symbol, 'SMART', 'USD')
+	
+	bars = ib.reqHistoricalData(
+    stock, endDateTime='', durationStr='200 D',
+    barSizeSetting='1 day', whatToShow='TRADES', useRTH=True)
+	df = util.df(bars)
+
+	df['20 Day MA'] = df['close'].rolling(window = 20).mean()
+	df['20 Day STD'] = df['close'].rolling(window = 20).std().apply(
 		lambda x: x * (math.sqrt(19) / math.sqrt(20)))
 	df['Upper Band'] = df['20 Day MA'] + 2 * df['20 Day STD']
 	df['Lower Band'] = df['20 Day MA'] - 2 * df['20 Day STD']
-	df[['Adj Close', '20 Day MA', 'Upper Band', 'Lower Band']].plot(figsize=(12,6))
+	df[['close', '20 Day MA', 'Upper Band', 'Lower Band']].plot(figsize=(12,6))
 
 	plt.style.use('fivethirtyeight')
 	fig = plt.figure(figsize=(12,6))
@@ -128,10 +166,10 @@ def plotBBBounds20(symbol):
 
 	ax.fill_between(x_axis, df['Upper Band'], df['Lower Band'], color='grey')
 
-	ax.plot(x_axis, df['Adj Close'], color='blue', lw=2)
+	ax.plot(x_axis, df['close'], color='blue', lw=2)
 	ax.plot(x_axis, df['20 Day MA'], color='black', lw=2)
 
-	ax.set_title('20 Day Bollinger Band For ' + symbol)
+	ax.set_title('20 Day Bollinger Band For ' + stock.Symbol)
 	ax.set_xlabel('Date (Year/Month)')
 	ax.set_ylabel('Price(USD)')
 
@@ -140,10 +178,18 @@ def plotBBBounds20(symbol):
 	plt.show()
 
 # finds the RSI for a stock
-def findRSI(symbol):
-	df = web.DataReader(symbol, data_source = 'yahoo', 
-		start = datetime.now() - timedelta(days = 30), end = datetime.now())
-	df['Gain'] = df['Adj Close'] - df['Open']
+def findRSI(stock,ib):
+	# df = web.DataReader(symbol, data_source = 'yahoo', 
+	# 	start = datetime.now() - timedelta(days = 30), end = datetime.now())
+
+	# stock = Stock(symbol, 'SMART', 'USD')
+	
+	bars = ib.reqHistoricalData(
+    stock, endDateTime='', durationStr='30 D',
+    barSizeSetting='1 day', whatToShow='TRADES', useRTH=True)
+	df = util.df(bars)
+
+	df['Gain'] = df['close'] - df['open']
 	current = df.iloc[-1]
 	df = df.iloc[-15:-1]
 	dfGain = df[df['Gain'] >= 0]
@@ -163,22 +209,38 @@ def findRSI(symbol):
 	return RSI
 
 # gets current price of stock, a little bit behind real time
-def getPrice(symbol):
-	price = web.DataReader(symbol, data_source = 'yahoo', 
-		start = datetime.now() - timedelta(days = 5), end = datetime.now())
-	price = price.iloc[-1]['Close']
+def getPrice(stock,ib):
+	# price = web.DataReader(symbol, data_source = 'yahoo', 
+	# 	start = datetime.now() - timedelta(days = 5), end = datetime.now())
+
+	# stock = Stock(symbol, 'SMART', 'USD',localSymbol=symbol)
+	
+	bars = ib.reqHistoricalData(
+    stock, endDateTime='', durationStr='5 D',
+    barSizeSetting='1 day', whatToShow='TRADES', useRTH=True)
+	price = util.df(bars)
+
+	price = price.iloc[-1]['close']
 	return price
 
 # decides what to do with the stock: buy, sell or hold
-def decide(symbol):
+def decide(stock,ib):
+	print(stock)
+	symbol = stock.symbol
 	fObj = open('DayLog.csv', 'a')
-	upperBand, lowerBand, bandWidth = find10BBBounds(symbol)
-	x, y, bandWidth = find20BBBounds(symbol)
-	rsi = findRSI(symbol)
-	price = web.DataReader(symbol, data_source = 'yahoo', 
-		start = datetime.now() - timedelta(days = 5), end = datetime.now())
-	price = price.iloc[-1]['Close']
-	upperSlope, realSlope, lowerSlope, upperI, realI, lowerI = findEquations(symbol)
+	upperBand, lowerBand, bandWidth = find10BBBounds(stock,ib)
+	x, y, bandWidth = find20BBBounds(stock,ib)
+	rsi = findRSI(stock,ib)
+	# price = web.DataReader(symbol, data_source = 'yahoo', 
+	# 	start = datetime.now() - timedelta(days = 5), end = datetime.now())
+
+	bars = ib.reqHistoricalData(
+    stock, endDateTime='', durationStr='5 D',
+    barSizeSetting='1 day', whatToShow='TRADES', useRTH=True)
+	price = util.df(bars)
+	price = price.iloc[-1]['close']
+
+	upperSlope, realSlope, lowerSlope, upperI, realI, lowerI = findEquations(stock,ib)
 	nextDayUp = upperSlope + upperI
 	nextDayReal = realSlope + realI
 	nextDayLow = lowerSlope + lowerI
@@ -213,7 +275,7 @@ def decide(symbol):
 		action = 'already in portfolio'
 	if symbol not in portfolio and action == 'sell':
 		action = 'not in portfolio'
-	line = '\n' + symbol + ',' + str(datetime.now()) + ',' + str(price) + ',' + str(upperBand) + ',' + \
+	line = '\n' + stock.symbol + ',' + str(datetime.now()) + ',' + str(price) + ',' + str(upperBand) + ',' + \
 		str(lowerBand) + ',' + str(bandWidth) + ',' + str(rsi) + ',' + str(upperSlope) + ',' + \
 		str(realSlope) + ',' + str(lowerSlope) + ',' + str(upperI) + ',' + str(realI) +',' + str(lowerI) + \
 		',' + str(action)
