@@ -133,7 +133,7 @@ def plotBBBounds10(stock,ib):
 	ax.plot(x_axis, df['close'], color='blue', lw=2)
 	ax.plot(x_axis, df['10 Day MA'], color='black', lw=2)
 
-	ax.set_title('10 Day Bollinger Band For ' + symbol)
+	ax.set_title('10 Day Bollinger Band For ' + stock.symbol)
 	ax.set_xlabel('Date (Year/Month)')
 	ax.set_ylabel('Price(USD)')
 
@@ -239,6 +239,8 @@ def decide(stock,ib):
     barSizeSetting='1 day', whatToShow='TRADES', useRTH=True)
 	price = util.df(bars)
 	price = price.iloc[-1]['close']
+
+	print(price)
 
 	upperSlope, realSlope, lowerSlope, upperI, realI, lowerI = findEquations(stock,ib)
 	nextDayUp = upperSlope + upperI

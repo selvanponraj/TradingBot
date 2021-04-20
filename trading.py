@@ -39,6 +39,7 @@ def cycle(ib):
 	for symbol in watchlist:
 		try:
 			stock = Stock(symbol, 'SMART', 'USD', localSymbol=symbol)
+			ib.qualifyContracts(stock)
 			move = decide(stock,ib)
 			if move == 'sell':
 				# create_order(symbol, portfolio[symbol], 'sell', 'market', 'gtc')
@@ -47,7 +48,7 @@ def cycle(ib):
 				# Uncomment during market hours
 				# while not trade.isDone():
 				# 	ib.waitOnUpdate()
-				print('Sold ' + symbol + ' at ' + str(getPrice(stock)))
+				print('Sold ' + symbol + ' at ' + str(getPrice(stock,ib)))
 				del portfolio[symbol]
 				updatePortfolio()
 			elif move == 'buy':
